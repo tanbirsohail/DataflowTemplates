@@ -15,13 +15,14 @@
  */
 package com.google.cloud.teleport.v2.templates.dao;
 
-/** DaoFactory, currently only supports MySql. */
+/** DaoFactory, currently only supports MySql and PostgreSQL. */
 public class DaoFactory {
   private String sqlUrl = "";
   private String sqlUser = "";
   private String sqlPasswd = "";
 
   private MySqlDao mySqlDao;
+  private PostgreSQLDao postgreSQLDao;
 
   public DaoFactory(String sqlUrl, String sqlUser, String sqlPasswd) {
     this.sqlUrl = sqlUrl;
@@ -35,5 +36,13 @@ public class DaoFactory {
     }
     this.mySqlDao = new MySqlDao(this.sqlUrl, this.sqlUser, this.sqlPasswd, shardId);
     return this.mySqlDao;
+  }
+
+  public PostgreSQLDao getPostgreSQLDao(String shardId) {
+    if (this.postgreSQLDao != null) {
+      return this.postgreSQLDao;
+    }
+    this.postgreSQLDao = new PostgreSQLDao(this.sqlUrl, this.sqlUser, this.sqlPasswd, shardId);
+    return this.postgreSQLDao;
   }
 }

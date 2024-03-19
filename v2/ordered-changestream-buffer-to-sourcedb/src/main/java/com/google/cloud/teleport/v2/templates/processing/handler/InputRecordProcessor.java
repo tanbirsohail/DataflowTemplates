@@ -17,8 +17,9 @@ package com.google.cloud.teleport.v2.templates.processing.handler;
 
 import com.google.cloud.Timestamp;
 import com.google.cloud.teleport.v2.spanner.migrations.schema.Schema;
-import com.google.cloud.teleport.v2.templates.dao.MySqlDao;
+import com.google.cloud.teleport.v2.templates.dao.BaseDao;
 import com.google.cloud.teleport.v2.templates.processing.dml.DMLGenerator;
+import com.google.cloud.teleport.v2.templates.processing.dml.DMLGeneratorPostgres;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -38,9 +39,10 @@ public class InputRecordProcessor {
   public static void processRecords(
       List<String> recordList,
       Schema schema,
-      MySqlDao dao,
+      BaseDao dao,
       String shardId,
-      String sourceDbTimezoneOffset) {
+      String sourceDbTimezoneOffset,
+      String sourceType) {
 
     try {
       boolean capturedlagMetric = false;
@@ -61,9 +63,24 @@ public class InputRecordProcessor {
         JSONObject newValuesJson = new JSONObject(newValuesJsonStr);
         JSONObject keysJson = new JSONObject(keysJsonStr);
 
-        String dmlStatement =
-            DMLGenerator.getDMLStatement(
-                modType, tableName, schema, newValuesJson, keysJson, sourceDbTimezoneOffset);
+        String dmlStatement = "";
+
+        if (sourceType.equals("mysql")) {
+          dmlStatement =
+              DMLGenerator.getDMLStatement(
+                  modType, tableName, schema, newValuesJson, keysJson, sourceDbTimezoneOffset);
+        } else if (sourceType.equals("postgres")) {
+          dmlStatement =
+              DMLGeneratorPostgres.getDMLStatement(
+                  modType, tableName, schema, newValuesJson, keysJson, sourceDbTimezoneOffset);
+        } else {
+          LOG.error("Only mysql and postgresql source types are supported.");
+          throw new RuntimeException(
+              "Input sourceType value : "
+                  + sourceType
+                  + " is unsupported. Supported values are : 'mysql' and 'postgres'");
+        }
+
         if (!dmlStatement.isEmpty()) {
           dmlBatch.add(dmlStatement);
         }
@@ -85,7 +102,9 @@ public class InputRecordProcessor {
       LOG.info(
           "Shard "
               + shardId
-              + ": Write to mysql for "
+              + ": Write to source :"
+              + sourceType
+              + " for "
               + recordList.size()
               + " took : "
               + ChronoUnit.MILLIS.between(daoStartTime, daoEndTime)

@@ -37,8 +37,6 @@ import org.apache.beam.sdk.io.gcp.spanner.SpannerAccessor;
 import org.apache.beam.sdk.io.gcp.spanner.SpannerConfig;
 import org.apache.beam.sdk.io.gcp.spanner.changestreams.model.ModType;
 import org.apache.beam.sdk.transforms.DoFn;
-import org.apache.beam.sdk.transforms.DoFn.ProcessContext;
-import org.apache.beam.sdk.transforms.DoFn.ProcessElement;
 import org.apache.beam.sdk.values.KV;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,10 +59,23 @@ public class AssignShardIdFn
   // Jackson Object mapper.
   private transient ObjectMapper mapper;
 
-  public AssignShardIdFn(SpannerConfig spannerConfig, Schema schema, Ddl ddl) {
+  // Source type for the pipeline. Default is 'mysql'
+  private final String sourceType;
+
+  // Postgres Shard ID, by default assigned shard1. Ignored if pipeline is of type 'mysql'.
+  private final String postgresShardId;
+
+  public AssignShardIdFn(
+      SpannerConfig spannerConfig,
+      Schema schema,
+      Ddl ddl,
+      String sourceType,
+      String postgresShardId) {
     this.spannerConfig = spannerConfig;
     this.schema = schema;
     this.ddl = ddl;
+    this.sourceType = sourceType;
+    this.postgresShardId = postgresShardId;
   }
 
   /** Setup function connects to Cloud Spanner. */
@@ -89,41 +100,47 @@ public class AssignShardIdFn
   public void processElement(ProcessContext c) {
     TrimmedDataChangeRecord record = c.element();
 
-    try {
-      String shardIdColumn = getShardIdColumnForTableName(record.getTableName());
+    // If sourceType is postgres, we set the provided shardID and return the value
+    if (sourceType.equals("postgres")) {
+      c.output(KV.of(postgresShardId, record));
+      return;
+    } else {
+      try {
+        String shardIdColumn = getShardIdColumnForTableName(record.getTableName());
 
-      String keysJsonStr = record.getMods().get(0).getKeysJson();
-      JsonNode keysJson = mapper.readTree(keysJsonStr);
+        String keysJsonStr = record.getMods().get(0).getKeysJson();
+        JsonNode keysJson = mapper.readTree(keysJsonStr);
 
-      String newValueJsonStr = record.getMods().get(0).getNewValuesJson();
-      JsonNode newValueJson = mapper.readTree(newValueJsonStr);
+        String newValueJsonStr = record.getMods().get(0).getNewValuesJson();
+        JsonNode newValueJson = mapper.readTree(newValueJsonStr);
 
-      if (keysJson.has(shardIdColumn)) {
-        String shardId = keysJson.get(shardIdColumn).asText();
-        c.output(KV.of(shardId, record));
-      } else if (newValueJson.has(shardIdColumn)) {
-        String shardId = newValueJson.get(shardIdColumn).asText();
-        c.output(KV.of(shardId, record));
-      } else if (record.getModType() == ModType.DELETE) {
-        String shardId =
-            fetchShardId(
-                record.getTableName(), record.getCommitTimestamp(), shardIdColumn, keysJson);
-        c.output(KV.of(shardId, record));
-      } else {
-        LOG.error(
-            "Cannot find entry for HarbourBridge shard id column '"
-                + shardIdColumn
-                + "' in record.");
+        if (keysJson.has(shardIdColumn)) {
+          String shardId = keysJson.get(shardIdColumn).asText();
+          c.output(KV.of(shardId, record));
+        } else if (newValueJson.has(shardIdColumn)) {
+          String shardId = newValueJson.get(shardIdColumn).asText();
+          c.output(KV.of(shardId, record));
+        } else if (record.getModType() == ModType.DELETE) {
+          String shardId =
+              fetchShardId(
+                  record.getTableName(), record.getCommitTimestamp(), shardIdColumn, keysJson);
+          c.output(KV.of(shardId, record));
+        } else {
+          LOG.error(
+              "Cannot find entry for HarbourBridge shard id column '"
+                  + shardIdColumn
+                  + "' in record.");
+          return;
+        }
+      } catch (IllegalArgumentException e) {
+        LOG.error("Error fetching shard Id column for table: " + e.getMessage());
+        return;
+      } catch (Exception e) {
+        StringWriter errors = new StringWriter();
+        e.printStackTrace(new PrintWriter(errors));
+        LOG.error("Error fetching shard Id colum: " + e.getMessage() + ": " + errors.toString());
         return;
       }
-    } catch (IllegalArgumentException e) {
-      LOG.error("Error fetching shard Id column for table: " + e.getMessage());
-      return;
-    } catch (Exception e) {
-      StringWriter errors = new StringWriter();
-      e.printStackTrace(new PrintWriter(errors));
-      LOG.error("Error fetching shard Id colum: " + e.getMessage() + ": " + errors.toString());
-      return;
     }
   }
 

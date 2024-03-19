@@ -34,30 +34,36 @@ public class ProcessingContext implements Serializable {
   private String bufferType;
   private String sourceDbTimezoneOffset;
 
+  private String sourceType;
+
   public ProcessingContext(
       KafkaConnectionProfile kafkaConnectionProfile,
       Shard shard,
       Schema schema,
-      String sourceDbTimezoneOffset) {
+      String sourceDbTimezoneOffset,
+      String sourceType) {
     this.shard = shard;
     this.kafkaConnectionProfile = kafkaConnectionProfile;
     this.schema = schema;
     this.bufferType = "kafka";
     this.pubSubConsumerProfile = null;
     this.sourceDbTimezoneOffset = sourceDbTimezoneOffset;
+    this.sourceType = sourceType;
   }
 
   public ProcessingContext(
       Shard shard,
       Schema schema,
       PubSubConsumerProfile pubSubConsumerProfile,
-      String sourceDbTimezoneOffset) {
+      String sourceDbTimezoneOffset,
+      String sourceType) {
     this.shard = shard;
     this.kafkaConnectionProfile = null;
     this.schema = schema;
     this.bufferType = "pubsub";
     this.pubSubConsumerProfile = pubSubConsumerProfile;
     this.sourceDbTimezoneOffset = sourceDbTimezoneOffset;
+    this.sourceType = sourceType;
   }
 
   public KafkaConnectionProfile getKafkaConnectionProfile() {
@@ -82,6 +88,10 @@ public class ProcessingContext implements Serializable {
 
   public String getSourceDbTimezoneOffset() {
     return sourceDbTimezoneOffset;
+  }
+
+  public String getSourceType() {
+    return sourceType;
   }
 
   @Override
