@@ -31,20 +31,22 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Writes data to MySQL. */
-public class MySqlDao extends BaseDao implements Serializable {
-  private static final Logger LOG = LoggerFactory.getLogger(MySqlDao.class);
+public class PostgreSQLDao extends BaseDao implements Serializable {
+  private static final Logger LOG = LoggerFactory.getLogger(PostgreSQLDao.class);
 
-  static final String JDBC_DRIVER = "com.mysql.jdbc.Driver";
+  static final String JDBC_DRIVER = "org.postgresql.Driver";
   private PoolingDriver driver = null;
   private String poolName = "";
   private String fullPoolName = "";
 
-  public MySqlDao(String sqlUrl, String sqlUser, String sqlPasswd, String shardId) {
-    sqlUrl = sqlUrl + "?rewriteBatchedStatements=true";
+  public PostgreSQLDao(String sqlUrl, String sqlUser, String sqlPasswd, String shardId) {
+    sqlUrl =
+        sqlUrl + "?rewriteBatchedStatements=true"; // TODO need to check if required for PostgreSQL
     try {
-      Class dirverClass = Class.forName(JDBC_DRIVER);
+      Class driverClass =
+          Class.forName(JDBC_DRIVER); // TODO initialization to variable may not be required
     } catch (ClassNotFoundException e) {
-      LOG.error("There was not able to find the driver class");
+      LOG.error("Unable to find JDBC driver in classpath. " + e.getMessage());
     }
 
     ConnectionFactory driverManagerConnectionFactory =
@@ -58,7 +60,7 @@ public class MySqlDao extends BaseDao implements Serializable {
     try {
       Class.forName("org.apache.commons.dbcp2.PoolingDriver");
     } catch (ClassNotFoundException e) {
-      LOG.error("There was not able to find the driver class");
+      LOG.error("Unable to find JDBC driver in classpath. " + e.getMessage());
     }
     try {
       driver = (PoolingDriver) DriverManager.getDriver("jdbc:apache:commons:dbcp:");
@@ -85,8 +87,8 @@ public class MySqlDao extends BaseDao implements Serializable {
         }
         statement.executeBatch();
         status = true;
-      } catch (com.mysql.cj.jdbc.exceptions.CommunicationsException e) {
-        // TODO: retry handling is configurable with retry count
+      } catch (org.postgresql.util.PSQLException e) { // TODO Replace with specific exception
+        // TODO: retry handling, configurable with retry count
         LOG.warn("Connection exception while executing SQL, will retry : " + e.getMessage());
       } finally {
 

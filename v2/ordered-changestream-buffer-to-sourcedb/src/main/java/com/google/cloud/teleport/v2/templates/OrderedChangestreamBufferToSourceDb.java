@@ -99,8 +99,9 @@ public class OrderedChangestreamBufferToSourceDb {
         order = 3,
         optional = true,
         description = "Destination source type",
-        enumOptions = {@TemplateEnumOption("mysql")},
-        helpText = "This is the type of source database. Currently only mysql is supported.")
+        enumOptions = {@TemplateEnumOption("mysql"), @TemplateEnumOption("postgres")},
+        helpText =
+            "This is the type of source database. MySQL is supported. PostgresSQL support is experimental")
     @Default.String("mysql")
     String getSourceType();
 

@@ -17,8 +17,8 @@ package com.google.cloud.teleport.v2.templates.processing.handler;
 
 import com.google.cloud.teleport.v2.templates.common.InputBufferReader;
 import com.google.cloud.teleport.v2.templates.common.ProcessingContext;
+import com.google.cloud.teleport.v2.templates.dao.BaseDao;
 import com.google.cloud.teleport.v2.templates.dao.DaoFactory;
-import com.google.cloud.teleport.v2.templates.dao.MySqlDao;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -38,6 +38,8 @@ public abstract class StreamingHandler {
     String shardId = taskContext.getShard().getLogicalShardId();
     InputBufferReader inputBufferReader = this.getBufferReader();
 
+    String sourceType = taskContext.getSourceType();
+
     try {
       Instant readStartTime = Instant.now();
       List<String> records = inputBufferReader.getRecords();
@@ -55,23 +57,39 @@ public abstract class StreamingHandler {
         return;
       }
 
-      String connectString =
-          "jdbc:mysql://"
-              + taskContext.getShard().getHost()
-              + ":"
-              + taskContext.getShard().getPort()
-              + "/"
-              + taskContext.getShard().getDbName();
+      String connectString = getConnectionString(taskContext, sourceType);
 
-      MySqlDao dao =
-          new DaoFactory(
-                  connectString,
-                  taskContext.getShard().getUserName(),
-                  taskContext.getShard().getPassword())
-              .getMySqlDao(shardId);
+      BaseDao dao = null;
+
+      if (sourceType.equals("mysql")) {
+        dao =
+            new DaoFactory(
+                    connectString,
+                    taskContext.getShard().getUserName(),
+                    taskContext.getShard().getPassword())
+                .getMySqlDao(shardId);
+      } else if (sourceType.equals("postgres")) {
+        dao =
+            new DaoFactory(
+                    connectString,
+                    taskContext.getShard().getUserName(),
+                    taskContext.getShard().getPassword())
+                .getPostgreSQLDao(shardId);
+      } else {
+        LOG.error("Only mysql and postgresql source types are supported.");
+        throw new RuntimeException(
+            "Input sourceType value : "
+                + sourceType
+                + " is unsupported. Supported values are : 'mysql' and 'postgres'");
+      }
 
       InputRecordProcessor.processRecords(
-          records, taskContext.getSchema(), dao, shardId, taskContext.getSourceDbTimezoneOffset());
+          records,
+          taskContext.getSchema(),
+          dao,
+          shardId,
+          taskContext.getSourceDbTimezoneOffset(),
+          sourceType);
       inputBufferReader.acknowledge();
       dao.cleanup();
       LOG.info(
@@ -91,4 +109,26 @@ public abstract class StreamingHandler {
   }
 
   public abstract InputBufferReader getBufferReader();
+
+  private String getConnectionString(ProcessingContext taskContext, String sourceType) {
+    String jdbcURLPrefix = "";
+    if (sourceType.equals("mysql")) {
+      jdbcURLPrefix = "jdbc:mysql://";
+    } else if (sourceType.equals("postgres")) {
+      jdbcURLPrefix = "jdbc:postgresql://";
+    } else {
+      LOG.error("Only mysql and postgresql source types are supported.");
+      throw new RuntimeException(
+          "Input sourceType value : "
+              + sourceType
+              + " is unsupported. Supported values are : 'mysql' and 'postgres'");
+    }
+
+    return jdbcURLPrefix
+        + taskContext.getShard().getHost()
+        + ":"
+        + taskContext.getShard().getPort()
+        + "/"
+        + taskContext.getShard().getDbName();
+  }
 }

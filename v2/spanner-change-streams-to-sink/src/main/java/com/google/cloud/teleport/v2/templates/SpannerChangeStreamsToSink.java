@@ -265,6 +265,29 @@ public class SpannerChangeStreamsToSink {
     String getFiltrationMode();
 
     void setFiltrationMode(String value);
+
+    @TemplateParameter.Enum(
+        order = 18,
+        optional = true,
+        description = "Destination source type",
+        enumOptions = {@TemplateEnumOption("mysql"), @TemplateEnumOption("postgres")},
+        helpText =
+            "This is the type of source database. MySQL is supported. PostgresSQL support is experimental")
+    @Default.String("mysql")
+    String getSourceType();
+
+    void setSourceType(String value);
+
+    @TemplateParameter.Text(
+        order = 18,
+        optional = true,
+        description = "Custom shardID to assign for if sourceType is 'postgres'",
+        helpText =
+            "The shardID value to set if the sourceType is set to postgres. Default value is 'shard1'")
+    @Default.String("shard1")
+    String getPostgresShardId();
+
+    void setPostgresShardId(String value);
   }
 
   private static void validateSinkParams(Options options) {
@@ -285,6 +308,19 @@ public class SpannerChangeStreamsToSink {
         throw new IllegalArgumentException(
             "need to provide a valid GCS file path containing source shard details for kafka"
                 + " sink.");
+      }
+    }
+
+    if (options.getSourceType().equals("postgres")) {
+      if (options.getPostgresShardId().equals("")) {
+        throw new IllegalArgumentException(
+            "need to provide set shardID value if sourceType is postgres. Can not be empty string");
+      }
+    } else {
+      if (options.getSourceType().equals("mysql")
+          && !options.getPostgresShardId().equals("shard1")) {
+        throw new IllegalArgumentException(
+            "Custom postgresShardID value passed, but sourceType is set as mysql. Please recheck input parameters");
       }
     }
   }
@@ -352,7 +388,14 @@ public class SpannerChangeStreamsToSink {
         .apply(ParDo.of(new FilterRecordsFn(options.getFiltrationMode())))
         .apply(ParDo.of(new PreprocessRecordsFn()))
         .setCoder(SerializableCoder.of(TrimmedDataChangeRecord.class))
-        .apply(ParDo.of(new AssignShardIdFn(spannerConfig, schema, ddl)))
+        .apply(
+            ParDo.of(
+                new AssignShardIdFn(
+                    spannerConfig,
+                    schema,
+                    ddl,
+                    options.getSourceType(),
+                    options.getPostgresShardId())))
         .apply(
             ParDo.of(new OrderRecordsAndWriteToSinkFn(options.getIncrementInterval(), dataSink)));
 

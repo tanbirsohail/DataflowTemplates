@@ -41,12 +41,12 @@ public class InputFileReader {
 
   public static List<Shard> getOrderedShardDetails(String sourceShardsFilePath, String sourceType) {
 
-    if (!"mysql".equals(sourceType)) {
-      LOG.error("Only mysql source type is supported.");
+    if (!(sourceType.equals("mysql") || sourceType.equals("postgres"))) {
+      LOG.error("Only 'mysql' and 'postgres' source type is supported.");
       throw new RuntimeException(
           "Input sourceType value : "
               + sourceType
-              + " is unsupported. Supported values are : mysql");
+              + " is unsupported. Supported values are : 'mysql' and 'postgres'");
     }
 
     try (InputStream stream =
@@ -63,6 +63,17 @@ public class InputFileReader {
 
       for (Shard s : shardList) {
         LOG.info(" The shard is: {} ", s);
+      }
+
+      if (sourceType.equals("postgres") && shardList.size() > 1) {
+        LOG.error(
+            "More than one shard entry found for postgres in sourceShards file {}. Only one shard entry should be present. Exiting",
+            sourceShardsFilePath);
+
+        throw new RuntimeException(
+            "More than one shard entry found for postgres in sourceShards file: "
+                + sourceShardsFilePath
+                + ". Only one shard entry should be present. Exiting.");
       }
 
       Collections.sort(

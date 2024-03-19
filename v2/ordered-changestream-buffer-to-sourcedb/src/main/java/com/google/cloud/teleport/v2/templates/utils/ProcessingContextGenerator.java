@@ -57,7 +57,8 @@ public class ProcessingContextGenerator {
         kafkaConnectionProfile.setPartitionId(partitionId);
         partitionId++;
         ProcessingContext taskContext =
-            new ProcessingContext(kafkaConnectionProfile, shard, schema, sourceDbTimezoneOffset);
+            new ProcessingContext(
+                kafkaConnectionProfile, shard, schema, sourceDbTimezoneOffset, sourceType);
         response.put(shard.getLogicalShardId(), taskContext);
       }
     } catch (CloneNotSupportedException e) {
@@ -86,7 +87,8 @@ public class ProcessingContextGenerator {
     for (Shard shard : shards) {
       LOG.info(" The sorted shard is: {}", shard);
       ProcessingContext taskContext =
-          new ProcessingContext(shard, schema, pubSubConsumerProfile, sourceDbTimezoneOffset);
+          new ProcessingContext(
+              shard, schema, pubSubConsumerProfile, sourceDbTimezoneOffset, sourceType);
       response.put(shard.getLogicalShardId(), taskContext);
     }
     return response;

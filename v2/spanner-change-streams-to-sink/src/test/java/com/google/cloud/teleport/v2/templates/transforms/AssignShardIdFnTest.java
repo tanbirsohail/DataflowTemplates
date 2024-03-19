@@ -54,7 +54,15 @@ public class AssignShardIdFnTest {
         pipeline
             .apply(
                 Create.of(records).withCoder(SerializableCoder.of(TrimmedDataChangeRecord.class)))
-            .apply(ParDo.of(new AssignShardIdFn(null, getSchemaObject(), null)));
+            .apply(
+                ParDo.of(
+                    new AssignShardIdFn(
+                        null,
+                        getSchemaObject(),
+                        null,
+                        "mysql",
+                        "customShardId"))); // postgres shardId will be ignored as sourceType is
+    // mysql
 
     PAssert.that(output)
         .containsInAnyOrder(
